@@ -28,12 +28,15 @@ class LoginResult {
   private String token;
   private String username;
   private List<String> roles;
+  private Long userId;
   public String getToken() { return token; }
   public void setToken(String token) { this.token = token; }
   public String getUsername() { return username; }
   public void setUsername(String username) { this.username = username; }
   public List<String> getRoles() { return roles; }
   public void setRoles(List<String> roles) { this.roles = roles; }
+  public Long getUserId() { return userId; }
+  public void setUserId(Long userId) { this.userId = userId; }
 }
 
 @RestController
@@ -88,13 +91,29 @@ public class AuthController {
     res.setToken(token);
     res.setUsername(user.getUsername());
     res.setRoles(roles);
+    res.setUserId(user.getId());
     return ApiResponse.ok(res);
   }
 
   @GetMapping("/me")
   public ApiResponse<Map<String,Object>> me(@RequestHeader(value = "Authorization", required = false) String auth) {
     Map<String,Object> info = new HashMap<>();
-    info.put("ok", true);
+    try{
+      String token = auth!=null && auth.startsWith("Bearer ") ? auth.substring(7) : null;
+      String username = token!=null ? jwtUtil.parse(token).getSubject() : null;
+      if (username != null) {
+        SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username));
+        info.put("username", username);
+        info.put("userId", user!=null ? user.getId() : null);
+        List<SysUserRole> urs = user!=null ? userRoleMapper.selectList(new QueryWrapper<SysUserRole>().eq("user_id", user.getId())) : Collections.emptyList();
+        List<String> roles = new ArrayList<>();
+        for (SysUserRole ur : urs) { SysRole role = roleMapper.selectById(ur.getRoleId()); if (role!=null) roles.add(role.getCode()); }
+        info.put("roles", roles);
+        info.put("ok", true);
+        return ApiResponse.ok(info);
+      }
+    } catch(Exception ignored) {}
+    info.put("ok", false);
     return ApiResponse.ok(info);
   }
 }

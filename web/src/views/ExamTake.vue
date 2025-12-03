@@ -31,6 +31,15 @@
       <div v-else-if="q.type==='SHORT'">
         <el-input type="textarea" v-model="answers[q.id]" />
       </div>
+      <div v-else-if="q.type==='CODE'">
+        <el-input
+          type="textarea"
+          v-model="answers[q.id]"
+          :autosize="{ minRows: 8, maxRows: 20 }"
+          placeholder="在此编写代码..."
+          style="font-family: Menlo, Consolas, 'Courier New', monospace;"
+        />
+      </div>
       <div style="margin-top:8px;">
         <el-button size="small" @click="save(q)">保存本题</el-button>
       </div>
@@ -60,6 +69,7 @@ import http from '../api/http'
 import { ElMessage } from 'element-plus'
 const sessionId = ref(Number(new URLSearchParams(location.search).get('sessionId'))||Date.now())
 const paperId = ref(Number(new URLSearchParams(location.search).get('paperId'))||0)
+const studentId = ref(Number(localStorage.getItem('userId')||0))
 const remain = ref(Number(new URLSearchParams(location.search).get('duration'))||60)
 let timer
 const items = ref([])
@@ -73,7 +83,7 @@ let ws
 function parse(s){ try{ return s? JSON.parse(s):null }catch(e){ return null } }
 async function load(){
   try{
-    await http.post('/exams/start', { sessionId: sessionId.value, paperId: paperId.value, studentId: 1 })
+    await http.post('/exams/start', { sessionId: sessionId.value, paperId: paperId.value, studentId: studentId.value })
   } catch(e){ /* 启动失败也继续加载试卷，避免页面空白 */ }
   const { data } = await http.get(`/exams/papers/${paperId.value}/preview`)
   items.value = data?.data || []
@@ -90,8 +100,9 @@ async function save(q){
   else if (q.type === 'SINGLE') shape = { index: answers.value[q.id] }
   else if (q.type === 'MULTI') shape = { indexes: (answers.value[q.id]||[]) }
   else if (q.type === 'JUDGE') shape = { value: answers.value[q.id] === 'TRUE' }
+  else if (q.type === 'CODE') shape = { text: answers.value[q.id] }
   else shape = { text: answers.value[q.id] }
-  const payload = { sessionId: sessionId.value, studentId: 1, questionId: q.id, answerJson: JSON.stringify(shape) }
+  const payload = { sessionId: sessionId.value, studentId: studentId.value, questionId: q.id, answerJson: JSON.stringify(shape) }
   await http.post('/exams/answers', payload)
   ElMessage.success('已保存')
 }
@@ -99,13 +110,13 @@ async function submit(){
   for (const q of items.value) {
     try { await save(q) } catch(e) { /* 忽略保存失败，提交时后端仍会处理 */ }
   }
-  const { data } = await http.post('/exams/submit', { sessionId: sessionId.value, paperId: paperId.value, studentId: 1 })
+  const { data } = await http.post('/exams/submit', { sessionId: sessionId.value, paperId: paperId.value, studentId: studentId.value })
   submitted.value = true
   router.push(`/exam/success?sessionId=${sessionId.value}&paperId=${paperId.value}`)
 }
 
 // 反作弊：失焦/切屏事件上报
-function report(type, detail){ http.post('/exams/events', { sessionId: sessionId.value, studentId: 1, type, detail }) }
+function report(type, detail){ http.post('/exams/events', { sessionId: sessionId.value, studentId: studentId.value, type, detail }) }
 function lock(reason){ if (!submitted.value) { openLock.value = true; report('lock', reason) } }
 window.addEventListener('blur', ()=> { report('blur','window'); lock('blur') })
 document.addEventListener('visibilitychange', ()=> { report('visibility', document.visibilityState); if (document.visibilityState==='hidden') lock('visibility') })

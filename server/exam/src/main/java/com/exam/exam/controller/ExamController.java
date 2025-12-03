@@ -27,6 +27,7 @@ public class ExamController {
 
   private static final Map<String, List<String>> EVENTS = new HashMap<>();
   private static final Map<String, Map<Long, String>> ANSWERS = new HashMap<>();
+  private static final Map<String, Integer> SWITCH_COUNTS = new HashMap<>();
 
   @PostMapping("/sessions")
   @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
@@ -36,11 +37,16 @@ public class ExamController {
     s.setId(sid);
     s.setPaperId(req.paperId);
     s.setStudentId(0L);
-    s.setStatus("START");
+    s.setStatus("SCHEDULED");
     try {
       java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
       if (req.startAt != null) s.setStartAt(java.time.LocalDateTime.parse(req.startAt, fmt));
       if (req.endAt != null) s.setEndAt(java.time.LocalDateTime.parse(req.endAt, fmt));
+      if (s.getStartAt()!=null && s.getEndAt()!=null) {
+        java.time.Duration dur = java.time.Duration.between(s.getStartAt(), s.getEndAt());
+        if (dur.isNegative() || dur.isZero()) return ApiResponse.error(40020, "结束时间必须晚于开始时间");
+        if (dur.toHours() > 24) return ApiResponse.error(40021, "考试窗口不能超过1天");
+      }
     } catch (Exception ignored) {}
     examService.createOrUpsertSession(s);
     return ApiResponse.ok(new CreateSessionResponse(sid));
@@ -49,6 +55,7 @@ public class ExamController {
   @PostMapping("/start")
   public ApiResponse<Map<String,Object>> start(@RequestBody StartExamRequest req) {
     Long sid = examService.start(req.sessionId, req.paperId, req.studentId);
+    if (sid == null) return ApiResponse.error(40010, "不在考试时间或会话不存在");
     Map<String,Object> resp = new HashMap<>();
     resp.put("sessionId", sid);
     resp.put("paperId", req.paperId);
@@ -74,7 +81,20 @@ public class ExamController {
 
   @GetMapping("/sessions")
   @PreAuthorize("hasAnyRole('ADMIN','TEACHER','PROCTOR')")
-  public ApiResponse<List<ExamSession>> listSessions(){ return ApiResponse.ok(examService.listSessions()); }
+  public ApiResponse<List<ExamSession>> listSessions(@RequestParam(required=false) Long paperId,
+                                                     @RequestParam(required=false) Boolean onlyPending){
+    return ApiResponse.ok(examService.listSessionsFiltered(paperId, onlyPending));
+  }
+
+  @GetMapping("/sessions/open")
+  public ApiResponse<List<ExamSession>> listOpen(){ return ApiResponse.ok(examService.listOpenSessions()); }
+
+  @GetMapping("/sessions/available")
+  public ApiResponse<List<ExamSession>> listAvailable(@RequestParam(required=false) String date){
+    java.time.LocalDate d = null;
+    try { if (date!=null && !date.isEmpty()) d = java.time.LocalDate.parse(date); } catch(Exception ignored) {}
+    return ApiResponse.ok(examService.listAvailableSessions(d));
+  }
 
   @GetMapping("/students/{studentId}/records")
   public ApiResponse<List<SessionSummary>> studentRecords(@PathVariable Long studentId){
@@ -116,6 +136,15 @@ public class ExamController {
   public ApiResponse<String> recordEvent(@RequestBody ExamEventRequest req) {
     String key = req.sessionId + ":" + req.studentId;
     EVENTS.computeIfAbsent(key, k -> new ArrayList<>()).add(req.type + ":" + req.detail);
+    String t = String.valueOf(req.type);
+    String d = String.valueOf(req.detail);
+    boolean isSwitch = "visibility".equalsIgnoreCase(t) && "hidden".equalsIgnoreCase(d)
+      || "blur".equalsIgnoreCase(t)
+      || (d!=null && d.contains("fullscreen-exit"))
+      || "lock".equalsIgnoreCase(t);
+    if (isSwitch) {
+      SWITCH_COUNTS.put(key, SWITCH_COUNTS.getOrDefault(key, 0) + 1);
+    }
     return ApiResponse.ok("ok");
   }
 
@@ -124,4 +153,18 @@ public class ExamController {
     String key = sessionId + ":" + studentId;
     return ApiResponse.ok(EVENTS.getOrDefault(key, Collections.emptyList()));
   }
+
+  @GetMapping("/events/{sessionId}/{studentId}/switches")
+  public ApiResponse<Integer> switchCount(@PathVariable Long sessionId, @PathVariable Long studentId) {
+    String key = sessionId + ":" + studentId;
+    return ApiResponse.ok(SWITCH_COUNTS.getOrDefault(key, 0));
+  }
+
+  @GetMapping("/sessions/{sessionId}/pending-count")
+  @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+  public ApiResponse<Integer> pendingCount(@PathVariable Long sessionId){ return ApiResponse.ok(examService.pendingCount(sessionId)); }
+
+  @PostMapping("/cleanup")
+  @PreAuthorize("hasAnyRole('ADMIN')")
+  public ApiResponse<java.util.Map<String,Integer>> cleanup(@RequestParam(defaultValue="true") boolean dry){ return ApiResponse.ok(examService.cleanup(dry)); }
 }

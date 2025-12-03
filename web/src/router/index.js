@@ -9,6 +9,7 @@ const routes = [
   ,{ path: '/exam/take', name: 'examTake', component: () => import('../views/ExamTake.vue'), meta: { requiresAuth: true } }
   ,{ path: '/exam/success', name: 'examSuccess', component: () => import('../views/ExamSuccess.vue'), meta: { requiresAuth: true } }
   ,{ path: '/records', name: 'records', component: () => import('../views/StudentRecords.vue'), meta: { requiresAuth: true } }
+  ,{ path: '/exam-center', name: 'examCenter', component: () => import('../views/ExamCenter.vue'), meta: { requiresAuth: true } }
   ,{ path: '/proctor', name: 'proctor', component: () => import('../views/Proctor.vue'), meta: { requiresAuth: true, roles:['ADMIN','PROCTOR'] } }
   ,{ path: '/grading', name: 'grading', component: () => import('../views/Grading.vue'), meta: { requiresAuth: true, roles:['ADMIN','TEACHER'] } }
 ]

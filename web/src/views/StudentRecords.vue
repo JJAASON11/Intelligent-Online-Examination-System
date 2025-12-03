@@ -34,7 +34,7 @@ import { ref, onMounted } from 'vue'
 import http from '../api/http'
 import { ElMessage } from 'element-plus'
 const rows = ref([])
-const studentId = 1
+const studentId = Number(localStorage.getItem('userId')||0)
 const open = ref(false)
 const current = ref(null)
 const summary = ref(null)
@@ -43,4 +43,3 @@ async function openDetail(row){ current.value=row; const { data } = await http.g
 function retake(row){ location.href = `/exam/take?sessionId=${row.sessionId}&paperId=${row.paperId}&duration=60` }
 onMounted(load)
 </script>
-

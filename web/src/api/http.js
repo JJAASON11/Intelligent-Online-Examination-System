@@ -8,9 +8,15 @@ const http = axios.create({
   timeout: 10000 // 增加超时设置
 })
 
+// 调试：打印请求
+let printedBase = false
 http.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
+  config.headers['Accept'] = 'application/json'
+  config.headers['X-Requested-With'] = 'XMLHttpRequest'
+  if (!printedBase) { console.info('[HTTP] baseURL =', http.defaults.baseURL); printedBase = true }
+  console.debug('[HTTP] request', { method: config.method, url: (config.baseURL||'') + (config.url||''), headers: config.headers, params: config.params, data: config.data })
   return config
 }, error => Promise.reject(error))
 
@@ -35,7 +41,9 @@ http.interceptors.response.use(
       // 处理 HTTP 状态码错误
       const msg = error.response?.data?.message || error.message || '网络连接失败'
       ElMessage.error(msg)
-      if (error.response?.status === 401) {
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('roles')
         router.push('/login')
       }
       return Promise.reject(error)

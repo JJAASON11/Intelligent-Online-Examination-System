@@ -8,7 +8,9 @@
         <el-menu-item index="/">首页</el-menu-item>
         <el-menu-item v-if="can(['ADMIN','TEACHER'])" index="/banks">题库管理</el-menu-item>
         <el-menu-item v-if="can(['ADMIN','TEACHER'])" index="/assemble">自动组卷</el-menu-item>
-        <el-menu-item v-if="can(['ADMIN','TEACHER','STUDENT'])" index="/exams">考试与监考</el-menu-item>
+        <el-menu-item index="/exam-center">考试中心</el-menu-item>
+        <el-menu-item index="/exams">考试与监考</el-menu-item>
+        <el-menu-item index="/records">我的考试记录</el-menu-item>
         <el-menu-item v-if="can(['ADMIN','TEACHER'])" index="/grading">智能阅卷</el-menu-item>
         <el-menu-item v-if="can(['ADMIN','PROCTOR'])" index="/proctor">在线监考WS</el-menu-item>
       </el-menu>

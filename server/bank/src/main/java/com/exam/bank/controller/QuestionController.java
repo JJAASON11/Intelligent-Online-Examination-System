@@ -18,7 +18,9 @@ public class QuestionController {
 
   @GetMapping
   public ApiResponse<java.util.Map<String,Object>> list(@RequestParam(defaultValue = "1") int page,
+
                                           @RequestParam(defaultValue = "10") int size) {
+    System.out.println(1111);
     Page<Question> p = service.page(new Page<>(page, size));
     java.util.Map<String,Object> resp = new java.util.HashMap<>();
     resp.put("records", p.getRecords());

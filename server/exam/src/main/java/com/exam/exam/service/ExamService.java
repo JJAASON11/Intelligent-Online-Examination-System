@@ -31,19 +31,14 @@ public class ExamService {
 
   public Long start(Long sessionId, Long paperId, Long studentId) {
     ExamSession exist = sessionMapper.selectById(sessionId);
-    if (exist != null) {
-      exist.setStudentId(studentId != null ? studentId : exist.getStudentId());
-      exist.setStatus("START");
-      sessionMapper.updateById(exist);
-      return exist.getId();
-    }
-    ExamSession s = new ExamSession();
-    s.setId(sessionId);
-    s.setPaperId(paperId);
-    s.setStudentId(studentId != null ? studentId : 1L);
-    s.setStatus("START");
-    sessionMapper.insert(s);
-    return s.getId();
+    if (exist == null) return null;
+    java.time.LocalDateTime now = java.time.LocalDateTime.now();
+    if (exist.getStartAt()!=null && now.isBefore(exist.getStartAt())) return null;
+    if (exist.getEndAt()!=null && now.isAfter(exist.getEndAt())) return null;
+    exist.setStudentId(studentId != null ? studentId : exist.getStudentId());
+    exist.setStatus("START");
+    sessionMapper.updateById(exist);
+    return exist.getId();
   }
 
   public void saveAnswer(Long sessionId, Long studentId, Long questionId, String answerJson) {
@@ -114,6 +109,41 @@ public class ExamService {
   public List<ExamSession> listSessionsByStudent(Long studentId) {
     return sessionMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ExamSession>().eq("student_id", studentId));
   }
+  public List<ExamSession> listOpenSessions() {
+    java.time.LocalDateTime now = java.time.LocalDateTime.now();
+    return sessionMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ExamSession>()
+      .le("start_at", now).ge("end_at", now));
+  }
+
+  public List<ExamSession> listAvailableSessions(java.time.LocalDate day) {
+    java.time.LocalDate d = day != null ? day : java.time.LocalDate.now();
+    java.time.LocalDateTime start = d.atStartOfDay();
+    java.time.LocalDateTime end = d.plusDays(1).atStartOfDay();
+    return sessionMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ExamSession>()
+      .ge("end_at", start)  // 还未结束
+      .lt("start_at", end)); // 当天开始
+  }
+
+  public int pendingCount(Long sessionId) {
+    int c = 0;
+    for (AnswerRecord ar : answerMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AnswerRecord>()
+      .eq(AnswerRecord::getSessionId, sessionId))) {
+      if (ar.getScoreAuto() == null && ar.getScoreFinal() == null) c++;
+    }
+    return c;
+  }
+
+  public List<ExamSession> listSessionsFiltered(Long paperId, Boolean onlyPending) {
+    com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ExamSession> qw = new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+    if (paperId != null) qw.eq("paper_id", paperId);
+    List<ExamSession> all = sessionMapper.selectList(qw);
+    if (Boolean.TRUE.equals(onlyPending)) {
+      List<ExamSession> res = new java.util.ArrayList<>();
+      for (ExamSession s : all) if (pendingCount(s.getId()) > 0) res.add(s);
+      return res;
+    }
+    return all;
+  }
 
   public List<AnswerRecord> listAnswers(Long sessionId) {
     return answerMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AnswerRecord>()
@@ -137,6 +167,37 @@ public class ExamService {
     ses.setStatus(status);
     sessionMapper.updateById(ses);
     return true;
+  }
+
+  public java.util.Map<String,Integer> cleanup(boolean dryRun) {
+    java.util.Map<String,Integer> stats = new java.util.HashMap<>();
+    java.util.List<ExamSession> sessions = sessionMapper.selectList(null);
+    java.util.Set<Long> sidSet = new java.util.HashSet<>();
+    for (ExamSession s : sessions) sidSet.add(s.getId());
+    int orphanAnswers = 0, dupAnswers = 0, badSessions = 0, nullAnswers = 0;
+    java.util.List<AnswerRecord> answers = answerMapper.selectList(null);
+    java.util.Map<String, java.util.List<AnswerRecord>> byPair = new java.util.HashMap<>();
+    for (AnswerRecord ar : answers) {
+      if (ar.getSessionId() == null || ar.getQuestionId() == null) { nullAnswers++; if (!dryRun) answerMapper.deleteById(ar.getId()); continue; }
+      if (!sidSet.contains(ar.getSessionId())) { orphanAnswers++; if (!dryRun) answerMapper.deleteById(ar.getId()); continue; }
+      String key = ar.getSessionId()+":"+ar.getQuestionId();
+      byPair.computeIfAbsent(key, k-> new java.util.ArrayList<>()).add(ar);
+    }
+    for (java.util.Map.Entry<String, java.util.List<AnswerRecord>> e : byPair.entrySet()) {
+      java.util.List<AnswerRecord> list = e.getValue();
+      if (list.size() > 1) {
+        list.sort(java.util.Comparator.comparing(AnswerRecord::getId));
+        for (int i=0;i<list.size()-1;i++) { dupAnswers++; if (!dryRun) answerMapper.deleteById(list.get(i).getId()); }
+      }
+    }
+    for (ExamSession s : sessions) {
+      if (s.getPaperId() == null) { badSessions++; if (!dryRun) sessionMapper.deleteById(s.getId()); }
+    }
+    stats.put("orphanAnswers", orphanAnswers);
+    stats.put("dupAnswers", dupAnswers);
+    stats.put("nullAnswers", nullAnswers);
+    stats.put("badSessions", badSessions);
+    return stats;
   }
 
   private void recompute(Long sessionId) { }
