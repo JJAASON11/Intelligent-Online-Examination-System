@@ -45,9 +45,7 @@
           {{ loading ? '登 录 中...' : '立 即 登 录' }}
         </el-button>
 
-        <div class="login-footer">
-          <span>后端地址: http://localhost:8080</span>
-        </div>
+        
       </el-form>
     </div>
   </div>

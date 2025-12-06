@@ -59,12 +59,18 @@ function connect(){
   ws.onopen = ()=>{
     isConnected.value = true
     join()
+    // 连接成功则停止轮询
+    if (poller) { clearInterval(poller); poller = null }
   }
   ws.onmessage = (e)=>{
     messages.value.push(e.data)
     if (String(e.data).startsWith('event:')) events.value.unshift(e.data.replace('event:',''))
   }
-  ws.onclose = ()=>{ isConnected.value = false }
+  ws.onclose = ()=>{
+    isConnected.value = false
+    // 断开后启用兜底轮询，降低频率
+    if (!poller) poller = setInterval(pull, 15000)
+  }
 }
 function join(){ if (ws && isConnected.value) ws.send(JSON.stringify({type:'join', sessionId: sid.value})) }
 function disconnect(){ if (ws) { ws.close(); ws=null } }
@@ -80,5 +86,5 @@ async function pull(){
   switchCount.value = Number(sc?.data?.data||0)
 }
 let poller
-onMounted(()=>{ poller = setInterval(pull, 5000) })
+onMounted(()=>{ poller = setInterval(pull, 15000) })
 </script>

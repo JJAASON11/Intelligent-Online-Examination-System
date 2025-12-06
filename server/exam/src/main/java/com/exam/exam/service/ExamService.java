@@ -177,9 +177,11 @@ public class ExamService {
     int orphanAnswers = 0, dupAnswers = 0, badSessions = 0, nullAnswers = 0;
     java.util.List<AnswerRecord> answers = answerMapper.selectList(null);
     java.util.Map<String, java.util.List<AnswerRecord>> byPair = new java.util.HashMap<>();
+    java.util.List<Long> nullIds = new java.util.ArrayList<>();
+    java.util.List<Long> orphanIds = new java.util.ArrayList<>();
     for (AnswerRecord ar : answers) {
-      if (ar.getSessionId() == null || ar.getQuestionId() == null) { nullAnswers++; if (!dryRun) answerMapper.deleteById(ar.getId()); continue; }
-      if (!sidSet.contains(ar.getSessionId())) { orphanAnswers++; if (!dryRun) answerMapper.deleteById(ar.getId()); continue; }
+      if (ar.getSessionId() == null || ar.getQuestionId() == null) { nullAnswers++; nullIds.add(ar.getId()); continue; }
+      if (!sidSet.contains(ar.getSessionId())) { orphanAnswers++; orphanIds.add(ar.getId()); continue; }
       String key = ar.getSessionId()+":"+ar.getQuestionId();
       byPair.computeIfAbsent(key, k-> new java.util.ArrayList<>()).add(ar);
     }
@@ -187,12 +189,16 @@ public class ExamService {
       java.util.List<AnswerRecord> list = e.getValue();
       if (list.size() > 1) {
         list.sort(java.util.Comparator.comparing(AnswerRecord::getId));
-        for (int i=0;i<list.size()-1;i++) { dupAnswers++; if (!dryRun) answerMapper.deleteById(list.get(i).getId()); }
+        for (int i=0;i<list.size()-1;i++) { dupAnswers++; if (!dryRun) nullIds.add(list.get(i).getId()); }
       }
     }
-    for (ExamSession s : sessions) {
-      if (s.getPaperId() == null) { badSessions++; if (!dryRun) sessionMapper.deleteById(s.getId()); }
+    if (!dryRun) {
+      if (!nullIds.isEmpty()) answerMapper.deleteBatchIds(nullIds);
+      if (!orphanIds.isEmpty()) answerMapper.deleteBatchIds(orphanIds);
     }
+    java.util.List<Long> badSesIds = new java.util.ArrayList<>();
+    for (ExamSession s : sessions) { if (s.getPaperId() == null) { badSessions++; badSesIds.add(s.getId()); } }
+    if (!dryRun && !badSesIds.isEmpty()) sessionMapper.deleteBatchIds(badSesIds);
     stats.put("orphanAnswers", orphanAnswers);
     stats.put("dupAnswers", dupAnswers);
     stats.put("nullAnswers", nullAnswers);

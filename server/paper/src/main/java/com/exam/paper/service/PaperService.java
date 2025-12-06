@@ -101,49 +101,19 @@ public class PaperService {
       int need = Math.max(0, e.getValue());
       if (need == 0) continue;
 
-      // 取该题型的所有候选，做难度分桶 + 随机，尽量均衡选择
-      List<Question> all;
+      // 随机抽取：直接在数据库层随机 + 限制条数，避免全量加载
+      List<Question> picked;
       if ("SHORT".equalsIgnoreCase(type)) {
-        // 简答与编程共用池
-        all = questionMapper.selectList(new QueryWrapper<Question>().in("type", java.util.Arrays.asList("SHORT","CODE")));
+        picked = questionMapper.selectList(new QueryWrapper<Question>()
+          .in("type", java.util.Arrays.asList("SHORT","CODE"))
+          .last("ORDER BY RAND() LIMIT " + need));
       } else {
-        all = questionMapper.selectList(new QueryWrapper<Question>().eq("type", type));
+        picked = questionMapper.selectList(new QueryWrapper<Question>()
+          .eq("type", type)
+          .last("ORDER BY RAND() LIMIT " + need));
       }
-      if (all.size() < need) {
-        return "题库中题型" + type + "数量不足，需" + need + "题，当前" + all.size() + "题";
-      }
-
-      List<Question> easy = new ArrayList<>(); // 难度 1-2
-      List<Question> mid  = new ArrayList<>(); // 难度 3
-      List<Question> hard = new ArrayList<>(); // 难度 4-5
-      for (Question q : all) {
-        Integer d = q.getDifficulty();
-        int diff = d == null ? 3 : d;
-        if (diff <= 2) easy.add(q); else if (diff == 3) mid.add(q); else hard.add(q);
-      }
-      Collections.shuffle(easy);
-      Collections.shuffle(mid);
-      Collections.shuffle(hard);
-
-      // 均衡配额：优先均分到 easy/mid/hard，余数依次填充
-      int quotaEasy = need / 3;
-      int quotaMid  = need / 3;
-      int quotaHard = need - quotaEasy - quotaMid;
-
-      List<Question> picked = new ArrayList<>();
-      picked.addAll(easy.subList(0, Math.min(quotaEasy, easy.size())));
-      picked.addAll(mid.subList(0, Math.min(quotaMid, mid.size())));
-      picked.addAll(hard.subList(0, Math.min(quotaHard, hard.size())));
-
-      // 如果某分桶不足，跨桶补齐到 need
       if (picked.size() < need) {
-        List<Question> pool = new ArrayList<>();
-        pool.addAll(easy); pool.addAll(mid); pool.addAll(hard);
-        // 去重
-        pool.removeAll(picked);
-        Collections.shuffle(pool);
-        int remain = need - picked.size();
-        picked.addAll(pool.subList(0, Math.min(remain, pool.size())));
+        return "题库中题型" + type + "数量不足，需" + need + "题，当前" + picked.size() + "题";
       }
 
       Integer fallbackShort = typeScores != null ? typeScores.get("SHORT") : null;

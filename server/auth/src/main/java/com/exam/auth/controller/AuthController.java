@@ -59,20 +59,12 @@ public class AuthController {
 
   @PostMapping(value = "/login", consumes = MediaType.APPLICATION_JSON_VALUE)
   public ApiResponse<LoginResult> login(@RequestBody LoginRequest req) {
-    System.out.println(111);
     SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("username", req.getUsername()));
     if (user == null || (user.getEnabled() != null && user.getEnabled() == 0)) {
       return ApiResponse.error(40100, "用户名或密码错误");
     }
     String stored = user.getPasswordHash();
-    boolean ok = false;
-    if (stored != null) {
-      if (stored.startsWith("{plain}")) {
-        ok = req.getPassword().equals(stored.substring(7));
-      } else {
-        ok = encoder.matches(req.getPassword(), stored);
-      }
-    }
+    boolean ok = stored != null && encoder.matches(req.getPassword(), stored);
     if (!ok) {
       return ApiResponse.error(40100, "用户名或密码错误");
     }

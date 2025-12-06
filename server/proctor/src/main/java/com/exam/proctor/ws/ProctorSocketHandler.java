@@ -6,10 +6,12 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component
 public class ProctorSocketHandler extends TextWebSocketHandler {
   private final Map<String, Set<WebSocketSession>> rooms = new HashMap<>();
+  private final ObjectMapper om = new ObjectMapper();
 
   @Override
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -46,21 +48,6 @@ public class ProctorSocketHandler extends TextWebSocketHandler {
   }
 
   private Map<String, Object> parseJson(String s) {
-    try {
-      // 极简解析（不引入额外依赖）
-      Map<String, Object> map = new HashMap<>();
-      s = s.trim().replaceAll("^\\{|\\}$", "");
-      for (String part : s.split(",")) {
-        String[] kv = part.split(":",2);
-        if (kv.length==2) {
-          String k = kv[0].trim().replaceAll("^\"|\"$","" );
-          String v = kv[1].trim().replaceAll("^\"|\"$","" );
-          map.put(k, v);
-        }
-      }
-      return map;
-    } catch (Exception e) {
-      return Collections.emptyMap();
-    }
+    try { return om.readValue(s, Map.class); } catch(Exception e){ return Collections.emptyMap(); }
   }
 }

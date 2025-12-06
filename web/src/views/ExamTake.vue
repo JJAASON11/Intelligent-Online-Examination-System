@@ -72,6 +72,7 @@ const paperId = ref(Number(new URLSearchParams(location.search).get('paperId'))|
 const studentId = ref(Number(localStorage.getItem('userId')||0))
 const remain = ref(Number(new URLSearchParams(location.search).get('duration'))||60)
 let timer
+let endTime = 0
 const items = ref([])
 const answers = ref({})
 const fillInputs = ref({})
@@ -141,10 +142,12 @@ onMounted(()=>{
   load()
   document.documentElement.requestFullscreen().catch(()=>{})
   window.addEventListener('beforeunload', (e)=>{ if (!submitted.value) { e.preventDefault(); e.returnValue = '正在考试，确认离开？' } })
+  endTime = Date.now() + remain.value * 60000
   timer = setInterval(()=>{
-    remain.value = Math.max(0, remain.value - 1)
-    if (remain.value === 0) { submit(); clearInterval(timer) }
-  }, 60000)
+    const leftSec = Math.max(0, Math.floor((endTime - Date.now()) / 1000))
+    remain.value = Math.ceil(leftSec / 60)
+    if (leftSec <= 0) { submit(); clearInterval(timer) }
+  }, 1000)
   connectWs()
 })
 function goHome(){ router.push('/') }
