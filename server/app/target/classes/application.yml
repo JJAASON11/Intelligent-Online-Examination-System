@@ -21,3 +21,9 @@ logging:
   level:
     root: INFO
     com.exam: INFO
+
+# 豆包AI配置
+doubao:
+  api-key: e9d219b6-eb17-4fd4-b544-47c659a88657  # 豆包API密钥
+  model: doubao-seed-1-8-251228  # 使用的模型名称
+  api-url: https://ark.cn-beijing.volces.com/api/v3/responses  # 豆包API地址

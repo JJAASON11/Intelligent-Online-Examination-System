@@ -17,10 +17,13 @@ public class QuestionController {
   public QuestionController(QuestionService service) { this.service = service; }
 
   @GetMapping
-  public ApiResponse<java.util.Map<String,Object>> list(@RequestParam(defaultValue = "1") int page,
-
-                                          @RequestParam(defaultValue = "10") int size) {
-    Page<Question> p = service.page(new Page<>(page, size));
+  public ApiResponse<java.util.Map<String,Object>> list(
+      @RequestParam(defaultValue = "1") int page,
+      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String type,
+      @RequestParam(required = false) Integer difficulty) {
+    Page<Question> p = service.page(new Page<>(page, size), keyword, type, difficulty);
     java.util.Map<String,Object> resp = new java.util.HashMap<>();
     resp.put("records", p.getRecords());
     resp.put("total", p.getTotal());

@@ -39,11 +39,26 @@ http.interceptors.response.use(
     },
     error => {
       // 处理 HTTP 状态码错误
-      const msg = error.response?.data?.message || error.message || '网络连接失败'
+      let msg = '网络连接失败'
+      
+      if (error.response) {
+        // 服务器返回了响应，但状态码不在 2xx 范围内
+        msg = error.response.data?.message || `服务器错误: ${error.response.status}`
+      } else if (error.request) {
+        // 请求已发出，但没有收到响应
+        msg = '无法连接到服务器，请检查后端服务是否启动（端口8080）'
+        console.error('请求失败，未收到响应:', error.request)
+      } else {
+        // 请求配置出错
+        msg = error.message || '请求配置错误'
+      }
+      
       ElMessage.error(msg)
+      
       if (error.response?.status === 401 || error.response?.status === 403) {
         localStorage.removeItem('token')
         localStorage.removeItem('roles')
+        localStorage.removeItem('userId')
         router.push('/login')
       }
       return Promise.reject(error)

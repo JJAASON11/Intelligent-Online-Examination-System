@@ -124,6 +124,17 @@ public class ExamController {
   @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
   public ApiResponse<List<AnswerRecord>> listAnswers(@PathVariable Long sessionId){ return ApiResponse.ok(examService.listAnswers(sessionId)); }
 
+  @GetMapping("/sessions/{sessionId}/my-answers")
+  public ApiResponse<List<AnswerRecord>> listMyAnswers(@PathVariable Long sessionId, @RequestParam Long studentId){
+    // 学生只能查看自己的答案，需要验证sessionId和studentId匹配
+    List<ExamSession> sessions = examService.listSessionsByStudent(studentId);
+    boolean hasAccess = sessions.stream().anyMatch(s -> s.getId().equals(sessionId));
+    if (!hasAccess) {
+      return ApiResponse.error(40300, "无权访问该考试记录");
+    }
+    return ApiResponse.ok(examService.listAnswers(sessionId));
+  }
+
   @PutMapping("/sessions/{sessionId}/answers/{questionId}/score")
   @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
   public ApiResponse<String> grade(@PathVariable Long sessionId, @PathVariable Long questionId, @RequestParam Integer score){
@@ -132,19 +143,29 @@ public class ExamController {
   }
 
   @PostMapping("/events")
-  @PreAuthorize("hasAnyRole('ADMIN','PROCTOR','TEACHER')")
   public ApiResponse<String> recordEvent(@RequestBody ExamEventRequest req) {
+    // 学生可以上报自己的事件，管理员/教师/监考员可以查看所有事件
     String key = req.sessionId + ":" + req.studentId;
-    EVENTS.computeIfAbsent(key, k -> new ArrayList<>()).add(req.type + ":" + req.detail);
+    String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    String eventStr = String.format("[%s] %s:%s", timestamp, req.type, req.detail);
+    EVENTS.computeIfAbsent(key, k -> new ArrayList<>()).add(eventStr);
+    
     String t = String.valueOf(req.type);
     String d = String.valueOf(req.detail);
-    boolean isSwitch = "visibility".equalsIgnoreCase(t) && "hidden".equalsIgnoreCase(d)
-      || "blur".equalsIgnoreCase(t)
-      || (d!=null && d.contains("fullscreen-exit"))
+    
+    // 判断是否为切屏事件（避免重复计算）
+    boolean isSwitch = ("visibility".equalsIgnoreCase(t) && "hidden".equalsIgnoreCase(d))
+      || ("blur".equalsIgnoreCase(t) && !"window".equalsIgnoreCase(d))
+      || (d != null && d.contains("fullscreen-exit"))
       || "lock".equalsIgnoreCase(t);
+    
+    // 切屏计数（使用同步块避免并发问题）
     if (isSwitch) {
+      synchronized (SWITCH_COUNTS) {
       SWITCH_COUNTS.put(key, SWITCH_COUNTS.getOrDefault(key, 0) + 1);
+      }
     }
+    
     return ApiResponse.ok("ok");
   }
 

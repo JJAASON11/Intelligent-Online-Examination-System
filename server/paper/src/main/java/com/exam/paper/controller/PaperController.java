@@ -10,7 +10,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-class CreatePaperRequest { public String name; public String subject; public Integer durationMin; public Map<String,Integer> strategy; public Map<String,Integer> typeScores; }
+class CreatePaperRequest {
+  public String name;
+  public String subject;
+  public Integer durationMin;
+  public Map<String,Integer> strategy;
+  public Map<String,Integer> typeScores;
+  // 试卷目标难度（1-5），用于智能组卷时筛选题目
+  public Integer difficulty;
+}
 class AssembleRequest { public Map<String,Integer> strategy; public Integer perScore; }
 
 @RestController
@@ -51,16 +59,24 @@ public class PaperController {
     p.setDurationMin(req.durationMin != null ? req.durationMin : 60);
     p.setSubject(req.subject != null ? req.subject : "通用");
     Long id = paperService.createPaper(p);
-    String err = paperService.assembleWithTypeScores(id, req.strategy != null ? req.strategy : new HashMap<>(), req.typeScores);
+    String err = paperService.assembleWithTypeScores(
+      id,
+      req.strategy != null ? req.strategy : new HashMap<>(),
+      req.typeScores,
+      req.difficulty
+    );
     if (err != null) return ApiResponse.error(40001, err);
     return ApiResponse.ok(id);
   }
 
   @PostMapping("/{paperId}/assemble-type-scores")
   public ApiResponse<String> assembleTypeScores(@PathVariable Long paperId, @RequestBody CreatePaperRequest req) {
-    String err = paperService.regenerateWithTypeScores(paperId,
+    String err = paperService.regenerateWithTypeScores(
+      paperId,
       req.strategy != null ? req.strategy : new HashMap<>(),
-      req.typeScores);
+      req.typeScores,
+      req.difficulty
+    );
     if (err != null) return ApiResponse.error(40001, err);
     return ApiResponse.ok("ok");
   }
